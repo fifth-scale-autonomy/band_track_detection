@@ -1,0 +1,52 @@
+# 흰 띠 트랙 경계 검출 설정 (설명은 README.md)
+# track_detector 노드 파라미터 파일이자 track_eval 이 같은 값을 읽는 파일.
+/**:
+  ros__parameters:
+    # 띠 규격 (사용자 값, 2026-10-12): [검 5][흰 10][검 5] cm
+    band_white: 0.10          # 흰 띠 폭 w (m)
+    band_black: 0.05          # 검정 띠 폭 b (m, 한쪽)
+    track_width: 1.5          # 좌우 흰 띠 중심 사이 (m, 사용자 2026-10-14). 0 = 모름 -> 트랙 폭 검사를 하지 않음
+
+    # 지면 격자 (base_link, 위에서 내려다본 영상). 행 0 = x_max (먼 쪽), 열 0 = +y (왼쪽)
+    grid_x_max: 6.5
+    grid_x_min: 0.0           # 0 이면 카메라 시야 아래 끝에서 계산
+    grid_y_half: 3.0
+    grid_res: 0.01            # m / 픽셀
+
+    # 밝기. BRIO YUYV 는 limited range (Y 16~235) 이고 포화 픽셀은 Y 232~234 에 몰린다
+    # (outdoor_1506 측정). 0~255 기준 값(포화 250, 목표 230)을 이 범위로 옮긴 값이다.
+    saturation_y: 230         # 이 이상은 포화로 본다
+
+    # 띠 추출 (3단계). 길이는 m, 비율은 흰 띠 폭 w 기준
+    response_min: 0.4         # ln 1.5: 흰색이 양옆 검정 중 밝은 쪽보다 1.5 배 밝아야 띠 후보
+    width_min_ratio: 0.6      # 흰 부분 폭 (밝기가 흰색과 밝은 검정의 중간 이상인 칸) 이 0.6w ~ 1.5w
+    width_max_ratio: 1.5
+    scan_stride: 2            # 띠를 따라 2 칸 (2 cm) 마다 계산
+
+    # 좌우 경계 (4단계)
+    link_dist: 0.15           # 이 거리 안의 중심점을 한 덩어리로
+    cluster_min_len: 0.5      # 이보다 짧은 덩어리는 버림
+    chain_gap: 0.6            # 덩어리 끝에서 이 거리 안, 진행 방향 chain_turn_deg 안에 시작하는 덩어리를 잇는다
+    chain_turn_deg: 45.0
+    width_tol: 0.25           # 좌우 간격이 track_width 의 +-25% 밖이면 신뢰도 x0.5 (track_width 0 이면 안 봄)
+    resample_step: 0.25       # 경계점 간격
+    conf_len: 2.0             # 신뢰도의 길이 항이 1 이 되는 경계 길이
+
+    # 시간 누적 (6단계). odom TF 가 있을 때만. 콘 기억처럼 확정된 경계점을 odom 으로 옮기며 기억해
+    # 검출이 빠진 곳 (그림자로 끊긴 구간, 카메라가 못 보는 차 앞, 그쪽이 통째로 안 보인 프레임) 을 채운다
+    accumulate: true
+    memory_hits: 3            # 이 횟수 이상 관측된 점만 확정 (1 s 안에 3 번)
+    memory_confirm_time: 1.0  # 확정 전 점은 이 시간 안에 다시 관측되어야 남는다 (s)
+    memory_time: 3.0          # 확정된 점을 마지막 관측 후 유지하는 시간 (s, 콘 기억 30 스캔 = 3 s 와 같게)
+    memory_gate: 0.2          # 이번 경계점과 기억점을 같은 점으로 보는 거리 (m, 경계점 간격 0.25 m)
+    memory_replace_dist: 1.0  # 이번 경계선 옆 (선분 범위 안) 이 거리 안의 기억점은 이번 검출로 바꿈 (m)
+    memory_seen_conf: 0.3     # 쪽별 신뢰도가 이 이상인 검출만 기억을 갱신
+    memory_split_gap: 1.0     # 기억과 합친 경계에서 이웃 점 간격이 이보다 크면 끊고 이번 검출이 많은 조각만 (m)
+    relabel_dist: 0.4         # 이번 경계점을 이 거리 안의 확정 기억점과 비교해 좌우를 바로잡음 (m).
+                              # 차가 트랙에 비스듬하면 앞을 가로지르는 띠의 좌우가 뒤바뀌는 것을 막는다
+    memory_x_behind: -0.5     # 이보다 뒤로 지나간 점은 지움 (m, base_link)
+
+    # 한쪽만 검출되면 반대편을 트랙 폭 (track_width, 0 이면 측정 평균) 만큼 평행하게 만들어
+    # band_<쪽>_virtual:<순번> 으로 낸다. 그쪽이 검출되면 (기억 포함) 만들지 않는다
+    parallel_fill: true
+    parallel_conf_min: 0.3    # 이 신뢰도 이상이면 검출됨 (경로 노드 band_conf_min 과 같게)
